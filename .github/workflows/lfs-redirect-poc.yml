@@ -1,0 +1,47 @@
+name: DSM-002-V1 GitHub Pages LFS Redirect PoC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [gh-pages]
+
+jobs:
+  lfs-redirect-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Git LFS
+        run: |
+          curl -sL https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-linux-amd64-v3.5.1.tar.gz | tar xz -C /tmp
+          sudo /tmp/git-lfs-3.5.1/install.sh
+
+      - name: Verify .lfsconfig from GitHub Pages CDN
+        run: |
+          echo "=== .lfsconfig content (served via *.github.io) ==="
+          cat .lfsconfig
+          echo ""
+          echo "=== LFS URL configured ==="
+          git config -f .lfsconfig --get lfs.url
+
+      - name: Demonstrate LFS redirect
+        run: |
+          echo "=== Git LFS environment ==="
+          git lfs env
+          echo ""
+          echo "=== This shows Git LFS will redirect ALL traffic to the .lfsconfig URL ==="
+          echo "=== In a real attack, credentials would be sent to the attacker's endpoint ==="
+          echo "=== Endpoint from .lfsconfig: $(git config -f .lfsconfig --get lfs.url) ==="
+
+      - name: Evidence summary
+        run: |
+          echo "## DSM-002-V1 Evidence"
+          echo "- .lfsconfig served from: https://graomelo.github.io/lfs-github-pages-poc/.lfsconfig"
+          echo "- LFS URL redirect: $(git config -f .lfsconfig --get lfs.url)"
+          echo "- Domain trust: *.github.io (widely trusted)"
+          echo "- Persistence: as long as gh-pages branch exists"
+          echo "- CWE: CWE-522 (Insufficiently Protected Credentials)"
+          echo "- CVSS: 8.3 (High)"
